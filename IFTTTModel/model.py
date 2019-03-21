@@ -79,19 +79,32 @@ def communicate(device1: CommunicatingDevice, device2: CommunicatingDevice):
 
 
 class User:
+    id_counter = 0
 
     def __init__(self, env: simpy.Environment):
         self.env = env
+        self.id_number = User._get_id_num()
         self.controls: List[Controller] = []
         self.devices: List[CommunicatingDevice] = []
+        self.wait_times: List[Tuple[int, int]] = []
+
+    @classmethod
+    def _get_id_num(cls) -> int:
+        num = cls.id_counter
+        cls.id_counter += 1
+        return num
 
     def add_device_with_manual_controller(self, device: CommunicatingDevice, controller: Controller):
         self.devices.append(device)
         self.controls.append(controller)
 
     def run(self):
-        yield self.env.timeout(random.random())
-        # FIXME Make this a variable
-
-        device = random.choice(self.controls)
-        yield from communicate(device, device.server)
+        while True:
+            yield self.env.timeout(random.random())
+            # FIXME Make this a variable
+            before = self.env.now
+            device = random.choice(self.controls)
+            yield from communicate(device, device.server)
+            after = self.env.now
+            wait = after - before
+            self.wait_times.append((before, wait))

@@ -1,5 +1,5 @@
 import IFTTTModel
 
-params = IFTTTModel.SimParams()
 sim = IFTTTModel.Simulation()
 sim.run()
+sim.view_wait_times()
