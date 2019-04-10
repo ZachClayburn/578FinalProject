@@ -1,6 +1,8 @@
-import IFTTTModel.model
-import matplotlib.pyplot as plt
 from typing import List
+
+import matplotlib.pyplot as plt
+
+import IFTTTModel.model
 
 
 def view_wait_times(users: List[IFTTTModel.model.User]) -> None:

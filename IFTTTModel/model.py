@@ -6,6 +6,11 @@ from typing import Tuple, Dict, List, Generator
 
 import simpy
 
+DAYS = 24
+HOURS = 1
+MINUTES = 1 / 60
+SECONDS = 1 / 3600
+
 
 class CommunicatingDevice(ABC):
 
@@ -50,19 +55,28 @@ class SimpleController(Controller):
 
 class Server(CommunicatingDevice):
 
-    def __init__(self, env: simpy.Environment, location: Tuple[float, float]):
+    def __init__(self, env: simpy.Environment,
+                 location: Tuple[float, float],
+                 capacity: int,
+                 response_mean: float,
+                 response_stdev: float,
+                 ):
         super().__init__(env, location)
-        # TODO Make this a list of devices, so one device can control many
+        # TODO Make this a list of devices, so one device can control many?
+        self.response_mean = response_mean
+        self.response_stdev = response_stdev
         self.connections: Dict[uuid.UUID, CommunicatingDevice] = {}
+        self.resources = simpy.Resource(self.env, capacity=capacity)
 
     def register_controller(self, controller: Controller, device: CommunicatingDevice):
         self.connections[controller.address] = device
         controller.server = self
 
     def _compute_command(self, controller: CommunicatingDevice):
-        yield self.env.timeout(random.random())
-        # FIXME Make this a variable dependant on the type of controller and
-        #  device, and only let a server handle so many responses at once
+        with self.resources.request() as req:
+            yield req
+            yield self.env.timeout(random.normalvariate(self.response_mean, self.response_stdev))
+            # TODO Make this a variable dependant on the type of controller and device?
 
     def receive_communication(self, sender: CommunicatingDevice):
         yield from self._compute_command(sender)
@@ -81,7 +95,9 @@ def communicate(device1: CommunicatingDevice, device2: CommunicatingDevice):
 class User:
     id_counter = 0
 
-    def __init__(self, env: simpy.Environment):
+    def __init__(self, env: simpy.Environment, interaction_mean: float, interaction_stdev: float):
+        self.interaction_stdev = interaction_stdev
+        self.interaction_mean = interaction_mean
         self.env = env
         self.id_number = User._get_id_num()
         self.controls: List[Controller] = []
@@ -100,8 +116,7 @@ class User:
 
     def run(self):
         while True:
-            yield self.env.timeout(random.random())
-            # FIXME Make this a variable
+            yield self.env.timeout(self.interaction_mean, self.interaction_stdev)
             before = self.env.now
             device = random.choice(self.controls)
             yield from communicate(device, device.server)
