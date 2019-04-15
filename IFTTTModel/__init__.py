@@ -6,7 +6,6 @@ import simpy
 import IFTTTModel.model as model
 from IFTTTModel.model import DAYS, HOURS, MINUTES, SECONDS
 import IFTTTModel.visualization as vis
-import numpy as np
 
 
 class Simulation:
@@ -101,7 +100,7 @@ class Simulation:
 
         print('Starting Simulation')
         self.env.process(progress_report(self.env))
-        self.env.process(minute_report(self.env))
+        # self.env.process(minute_report(self.env))
         self.env.run(until=self.sim_length_days)
         self.has_run = True
 

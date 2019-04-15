@@ -2,10 +2,9 @@ import random
 import uuid
 from abc import ABC, abstractmethod
 from cmath import sqrt
-from typing import Tuple, Dict, List, Generator
+from typing import Tuple, Dict, List, Generator, Iterable
 
 import simpy
-import scipy.stats as st
 import numpy as np
 
 DAYS = 24
@@ -97,18 +96,6 @@ def communicate(device1: CommunicatingDevice, device2: CommunicatingDevice):
     yield from device2.receive_communication(device1)
 
 
-class UserActionDistribution(st.rv_continuous):
-    def __init__(self):
-        super().__init__(a=0, b=(1*DAYS))
-
-    def _pdf(self, x, *args):
-        return (0.8 * self.normal_pdf(x, 7, 7)) + (2.2 * self.normal_pdf(x, 17, 15))
-
-    @staticmethod
-    def normal_pdf(x: float, mean: float, variance: float) -> float:
-        return np.exp(- (x - mean)**2 / (2 * variance)) / np.sqrt(2 * np.pi * variance)
-
-
 class User:
     id_counter = 0
 
@@ -123,7 +110,6 @@ class User:
         self.controls: List[Controller] = []
         self.devices: List[CommunicatingDevice] = []
         self.wait_times: List[Tuple[int, int]] = []
-        self.interaction_distribution = UserActionDistribution()
 
     def _action_times(self):
         day_count = 0
@@ -132,11 +118,22 @@ class User:
             while interaction_count < 0:
                 interaction_count = random.normalvariate(self.daily_interactions_mean, self.daily_interactions_stdev)
                 interaction_count = int(interaction_count)
-            interaction_times = self.interaction_distribution.rvs(scale=2, size=int(np.round(interaction_count)))
-            interaction_times.sort()
+            interaction_times = self._daily_times(size=int(np.round(interaction_count)))
             for time in interaction_times:
                 yield time + day_count * DAYS
             day_count += 1
+
+    @staticmethod
+    def _daily_times(size: int) -> Iterable[float]:
+        times = []
+        for _ in range(size):
+            time = -1
+            mu_sigma = (17, 5) if random.random() < 0.65 else (7, 1)
+            while time < 0:
+                time = random.normalvariate(*mu_sigma)
+            times.append(time)
+        times.sort()
+        return times
 
     @classmethod
     def _get_id_num(cls) -> int:
@@ -151,7 +148,6 @@ class User:
     def run(self):
         for interaction_time in self._action_times():
             yield self.env.timeout(max(interaction_time - self.env.now, 0))
-            print(f'{self.env.now}, {self.id_number}')
             before = self.env.now
             device = random.choice(self.controls)
             yield from communicate(device, device.server)
