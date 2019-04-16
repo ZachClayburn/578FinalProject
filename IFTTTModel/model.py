@@ -2,7 +2,8 @@ import random
 import uuid
 from abc import ABC, abstractmethod
 from cmath import sqrt
-from typing import Tuple, Dict, List, Generator, Iterable
+from typing import Tuple, Dict, List, Generator, Iterable, Union
+import multiprocessing
 
 import simpy
 import numpy as np
@@ -16,9 +17,12 @@ SECONDS = 1 / 3600
 class CommunicatingDevice(ABC):
 
     def __init__(self, env: simpy.Environment, location: Tuple[float, float]):
-        self.address = uuid.uuid1()
+        self.address = uuid.uuid4()
         self.env = env
         self.location = location
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}(address={self.address!r}, location={self.location!r})'
 
     @abstractmethod
     def receive_communication(self, sender: 'CommunicatingDevice') -> Generator:
@@ -70,9 +74,9 @@ class Server(CommunicatingDevice):
         self.resources = simpy.Resource(self.env, capacity=capacity)
         self.load: List[Tuple[float, int]] = []
 
-    def register_controller(self, controller: Controller, device: CommunicatingDevice):
-        self.connections[controller.address] = device
-        controller.server = self
+    def register_connection(self, source: Union[Controller, 'Server'], destination: CommunicatingDevice):
+        self.connections[source.address] = destination
+        source.server = self
 
     def _compute_command(self, controller: CommunicatingDevice):
         with self.resources.request() as req:
@@ -92,6 +96,9 @@ def _compute_distance(location1: Tuple[float, float], location2: Tuple[float, fl
 
 
 def communicate(device1: CommunicatingDevice, device2: CommunicatingDevice):
+    pos1 = device1.location
+    pos2 = device2.location
+    dist = sqrt((pos1[0] - pos2[0]) ** 2 + (pos1[1] - pos2[1] ** 2))
     yield device1.env.timeout(random.random() * 0.01 * SECONDS)  # FIXME Add controllable range of communication time
     yield from device2.receive_communication(device1)
 

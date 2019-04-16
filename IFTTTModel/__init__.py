@@ -1,5 +1,5 @@
 import random
-from typing import List, Callable, Tuple
+from typing import List, Callable, Tuple, Union
 
 import simpy
 
@@ -22,7 +22,8 @@ class Simulation:
                  server_capacity_stdv: int = 4,
                  server_response_mean: float = 1 * SECONDS,
                  server_response_stdv: float = 0.01 * SECONDS,
-                 boundary_side_length: float = 100
+                 num_servers: int = 3,
+                 boundary_side_length: float = 100,
                  ):
         print('Creating Simulations')
         self.num_users = num_users
@@ -40,10 +41,12 @@ class Simulation:
         self.server_response_mean = server_response_mean
         self.server_response_stdv = server_response_stdv
 
+        self.num_servers = num_servers
+
         self.boundary_side_length = boundary_side_length
 
         self.users: List[model.User] = []
-        self.server: model.Server = None
+        self.servers: List[model.Server] = []
 
         self.has_run = False
         self.env = simpy.Environment()
@@ -54,18 +57,26 @@ class Simulation:
         return self.boundary_side_length * random.random(), self.boundary_side_length * random.random()
 
     def build_sim(self):
-        capacity = random.normalvariate(self.server_capacity_mean, self.server_capacity_stdv)
-        server_location = self._get_position()
-        self.server = model.Server(self.env, server_location, capacity,
-                                   self.server_response_mean, self.server_response_stdv)
+
+        for _ in range(self.num_servers):
+            capacity = random.normalvariate(self.server_capacity_mean, self.server_capacity_stdv)
+            server_location = self._get_position()
+            self.servers.append(model.Server(self.env, server_location, capacity,
+                                             self.server_response_mean, self.server_response_stdv))
+
         print('Creating users')
-        for i in range(self.num_users):
+        for _ in range(self.num_users):
             user = model.User(self.env, self.user_interaction_mean, self.user_interaction_stdv)
             location = self._get_position()
-            for j in range(self._get_num_devices_for_user()):
+            for _ in range(self._get_num_devices_for_user()):
                 controller = model.SimpleController(self.env, location)
                 device = model.ToggleDevice(self.env, location)
-                self.server.register_controller(controller, device)
+                steps = random.randint(1, self.num_servers)
+                pipeline: List[Union[model.CommunicatingDevice, model.Server]] = random.sample(self.servers, steps)
+                pipeline.insert(0, controller)
+                pipeline.append(device)
+                for i in range(1, len(pipeline)-1):
+                    pipeline[i].register_connection(pipeline[i-1], pipeline[i+1])
                 user.add_device_with_manual_controller(device, controller)
 
             self.users.append(user)
@@ -109,7 +120,7 @@ class Simulation:
         vis.view_wait_times(self.users)
 
     def view_positions(self):
-        vis.show_geographical_distribution([self.server], self.users)
+        vis.show_geographical_distribution(self.servers, self.users)
 
     def view_load_over_time(self):
-        vis.show_loads_over_time([self.server])
+        vis.show_loads_over_time(self.servers)
