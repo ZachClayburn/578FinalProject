@@ -13,33 +13,29 @@ class Simulation:
     def __init__(self,
                  num_users: int = 15000,
                  mean_num_devices_per_user: int = 10,
-                 stdv_num_devices_per_user: int = 2,
                  user_interaction_mean: float = 20,
-                 user_interaction_stdv: float = 10,
                  sim_length_days: int = 5 * DAYS + 1 * MINUTES,
                  server_capacity: int = 30,
-                 server_capacity_mean: int = 30,
-                 server_capacity_stdv: int = 4,
                  server_response_mean: float = 1 * SECONDS,
-                 server_response_stdv: float = 0.01 * SECONDS,
+                 signal_slowness: float = 0.01,
                  num_servers: int = 3,
                  boundary_side_length: float = 100,
                  ):
         print('Creating Simulations')
         self.num_users = num_users
         self.mean_num_devices_per_user = mean_num_devices_per_user
-        self.stdv_num_devices_per_user = stdv_num_devices_per_user
+        self.stdv_num_devices_per_user = mean_num_devices_per_user * 0.2
 
         self.sim_length_days = sim_length_days
 
         self.user_interaction_mean = user_interaction_mean
-        self.user_interaction_stdv = user_interaction_stdv
+        self.user_interaction_stdv = user_interaction_mean * 0.2
 
         self.server_capacity = server_capacity
-        self.server_capacity_mean = server_capacity_mean
-        self.server_capacity_stdv = server_capacity_stdv
         self.server_response_mean = server_response_mean
-        self.server_response_stdv = server_response_stdv
+        self.server_response_stdv = server_response_mean * 0.2
+
+        model.time_to_distance_ratio = signal_slowness
 
         self.num_servers = num_servers
 
@@ -59,9 +55,8 @@ class Simulation:
     def build_sim(self):
 
         for _ in range(self.num_servers):
-            capacity = random.normalvariate(self.server_capacity_mean, self.server_capacity_stdv)
             server_location = self._get_position()
-            self.servers.append(model.Server(self.env, server_location, capacity,
+            self.servers.append(model.Server(self.env, server_location, self.server_capacity,
                                              self.server_response_mean, self.server_response_stdv))
 
         print('Creating users')

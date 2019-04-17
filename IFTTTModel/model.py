@@ -3,7 +3,6 @@ import uuid
 from abc import ABC, abstractmethod
 from cmath import sqrt
 from typing import Tuple, Dict, List, Generator, Iterable, Union
-import multiprocessing
 
 import simpy
 import numpy as np
@@ -12,6 +11,8 @@ DAYS = 24
 HOURS = 1
 MINUTES = 1 / 60
 SECONDS = 1 / 3600
+
+time_to_distance_ratio = None
 
 
 class CommunicatingDevice(ABC):
@@ -80,10 +81,13 @@ class Server(CommunicatingDevice):
 
     def _compute_command(self, controller: CommunicatingDevice):
         with self.resources.request() as req:
-            self.load.append((self.env.now, self.resources.count))
+            current_load = self.resources.count
+            self.load.append((self.env.now, current_load))
             yield req
             self.load.append((self.env.now, self.resources.count))
-            yield self.env.timeout(random.normalvariate(self.response_mean, self.response_stdev))
+            response_time = (1 + current_load / self.resources.capacity) * \
+                            random.normalvariate(self.response_mean, self.response_stdev)
+            yield self.env.timeout(response_time)
             # TODO Make this a variable dependant on the type of controller and device?
 
     def receive_communication(self, sender: CommunicatingDevice):
@@ -92,14 +96,13 @@ class Server(CommunicatingDevice):
 
 
 def _compute_distance(location1: Tuple[float, float], location2: Tuple[float, float]) -> float:
-    return sqrt((location1[0] - location2[0]) ** 2 + (location1[1] - location2[1]) ** 2)
+    dist = sqrt((location1[0] - location2[0]) ** 2 + (location1[1] - location2[1]) ** 2)
+    return dist if not isinstance(dist, complex) else dist.real
 
 
 def communicate(device1: CommunicatingDevice, device2: CommunicatingDevice):
-    pos1 = device1.location
-    pos2 = device2.location
-    dist = sqrt((pos1[0] - pos2[0]) ** 2 + (pos1[1] - pos2[1] ** 2))
-    yield device1.env.timeout(random.random() * 0.01 * SECONDS)  # FIXME Add controllable range of communication time
+    dist = _compute_distance(device1.location, device2.location)
+    yield device1.env.timeout(dist * time_to_distance_ratio)  # FIXME Add controllable range of communication time
     yield from device2.receive_communication(device1)
 
 
