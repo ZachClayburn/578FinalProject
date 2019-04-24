@@ -12,7 +12,7 @@ HOURS = 1
 MINUTES = 1 / 60
 SECONDS = 1 / 3600
 
-time_to_distance_ratio = None
+time_to_distance_ratio: float = None
 
 
 class CommunicatingDevice(ABC):
@@ -85,8 +85,10 @@ class Server(CommunicatingDevice):
             self.load.append((self.env.now, current_load))
             yield req
             self.load.append((self.env.now, self.resources.count))
-            response_time = (1 + current_load / self.resources.capacity) * \
-                            random.normalvariate(self.response_mean, self.response_stdev)
+            base_response = -1
+            while base_response < 0:
+                base_response = random.normalvariate(self.response_mean, self.response_stdev)
+            response_time = (1 + current_load / self.resources.capacity) * base_response
             yield self.env.timeout(response_time)
             # TODO Make this a variable dependant on the type of controller and device?
 
@@ -112,26 +114,26 @@ class User:
     def __init__(self,
                  env: simpy.Environment,
                  daily_interactions_mean: float,
-                 daily_interactions_stdev: float):
+                 daily_interactions_stdev: float,
+                 patience: float = 0):  # TODO Remove default value
         self.daily_interactions_stdev = daily_interactions_stdev
         self.daily_interactions_mean = daily_interactions_mean
         self.env = env
+        self.patience = patience
+        self.resource = simpy.Resource(env)
         self.id_number = User._get_id_num()
         self.controls: List[Controller] = []
         self.devices: List[CommunicatingDevice] = []
         self.wait_times: List[Tuple[int, int]] = []
 
-    def _action_times(self):
-        day_count = 0
-        while True:
-            interaction_count = -1
-            while interaction_count < 0:
-                interaction_count = random.normalvariate(self.daily_interactions_mean, self.daily_interactions_stdev)
-                interaction_count = int(interaction_count)
-            interaction_times = self._daily_times(size=int(np.round(interaction_count)))
-            for time in interaction_times:
-                yield time + day_count * DAYS
-            day_count += 1
+    def _action_times(self, day_count: int):
+        interaction_count = -1
+        while interaction_count < 0:
+            interaction_count = random.normalvariate(self.daily_interactions_mean, self.daily_interactions_stdev)
+            interaction_count = int(interaction_count)
+        interaction_times = self._daily_times(size=int(np.round(interaction_count)))
+        for time in interaction_times:
+            yield time + day_count * DAYS
 
     @staticmethod
     def _daily_times(size: int) -> Iterable[float]:
@@ -155,12 +157,21 @@ class User:
         self.devices.append(device)
         self.controls.append(controller)
 
+    def _interact(self, interaction_time):
+        scheduled_time = interaction_time - self.env.now
+        assert scheduled_time >= 0
+        yield self.env.timeout(scheduled_time)
+        before = self.env.now
+        device = random.choice(self.controls)
+        yield from communicate(device, device.server)
+        after = self.env.now
+        wait = after - before
+        self.wait_times.append((before, wait))
+
     def run(self):
-        for interaction_time in self._action_times():
-            yield self.env.timeout(max(interaction_time - self.env.now, 0))
-            before = self.env.now
-            device = random.choice(self.controls)
-            yield from communicate(device, device.server)
-            after = self.env.now
-            wait = after - before
-            self.wait_times.append((before, wait))
+        day_count = 0
+        while True:
+            for interaction_time in self._action_times(day_count):
+                self.env.process(self._interact(interaction_time))
+            day_count += 1
+            yield self.env.timeout(1 * DAYS)

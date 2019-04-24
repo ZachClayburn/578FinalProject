@@ -62,4 +62,7 @@ def show_loads_over_time(servers: List[model.Server]):
     time, loads = zip(*server_loads)
     plt.figure()
     plt.plot(time, loads)
+    plt.title('Server load over time')
+    plt.xlabel('time (hours)')
+    plt.ylabel('load (# of connected devices)')
     plt.show()
