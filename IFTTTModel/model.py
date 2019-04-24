@@ -131,21 +131,17 @@ class User:
         while interaction_count < 0:
             interaction_count = random.normalvariate(self.daily_interactions_mean, self.daily_interactions_stdev)
             interaction_count = int(interaction_count)
-        interaction_times = self._daily_times(size=int(np.round(interaction_count)))
-        for time in interaction_times:
+        for time in self._daily_times(size=int(np.round(interaction_count))):
             yield time + day_count * DAYS
 
     @staticmethod
     def _daily_times(size: int) -> Iterable[float]:
-        times = []
         for _ in range(size):
             time = -1
             mu_sigma = (17, 5) if random.random() < 0.65 else (7, 1)
             while time < 0:
                 time = random.normalvariate(*mu_sigma)
-            times.append(time)
-        times.sort()
-        return times
+            yield time
 
     @classmethod
     def _get_id_num(cls) -> int:
